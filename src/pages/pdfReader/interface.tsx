@@ -26,4 +26,12 @@ export interface ViewerState {
   rect: any;
   loading: boolean;
   isDisablePopup: boolean;
+  hiddenPages: number[];
+  isHideHovered: boolean;
+  isShareHovered: boolean;
+}
+declare global {
+  interface Window {
+    PDFViewerApplication: any;
+  }
 }
