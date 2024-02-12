@@ -131,7 +131,7 @@ class BookCardItem extends React.Component<BookCardProps, BookCardState> {
           }}
         >
           <div
-            className="book-item-cover"
+            className={`book-item-cover book-item-${this.props.book.key}`}
             onClick={() => {
               this.handleJump();
             }}

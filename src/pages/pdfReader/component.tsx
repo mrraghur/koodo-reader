@@ -3,7 +3,6 @@ import RecentBooks from "../../utils/readUtils/recordRecent";
 import { ViewerProps, ViewerState } from "./interface";
 import HideIcon from "../../assets/icon-hide.png";
 import ShareIcon from "../../assets/icon-share.png";
-import SaveIcon from "../../assets/icon-save.png";
 
 import { withRouter } from "react-router-dom";
 import BookUtil from "../../utils/fileUtils/bookUtil";
@@ -17,7 +16,6 @@ import StorageUtil from "../../utils/serviceUtils/storageUtil";
 import PopupBox from "../../components/popups/popupBox";
 import { renderHighlighters } from "../../utils/serviceUtils/noteUtil";
 import { getPDFIframeDoc } from "../../utils/serviceUtils/docUtil";
-import ShareNotifier from "../../components/shareNotifier/shareNotifier";
 declare var window: any;
 class Viewer extends React.Component<ViewerProps, ViewerState> {
   constructor(props: ViewerProps) {
@@ -113,6 +111,14 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
         );
       }, 3000);
     };
+
+    // Add shareClicked event listener
+    this.handleShareClick = this.handleShareClick.bind(this);
+    document.addEventListener("shareClicked", this.handleShareClick);
+  }
+  componentWillUnmount() {
+    // Remove shareClicked event listener
+    document.removeEventListener("shareClicked", this.handleShareClick);
   }
   handleHighlight = () => {
     let highlighters: any = this.props.notes;
@@ -130,34 +136,77 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
     this.props.handleMenuMode("note");
     this.props.handleOpenMenu(true);
   };
-  toggleCurrentPageVisibility = () => {
+  hideCurrentPage = () => {
     const currentPage = this.getCurrentPageNumber();
-    if (currentPage === null) {
-      console.error("Unable to get current page number");
-      return;
-    }
 
-    this.setState(
-      (prevState) => ({
-        hiddenPages: prevState.hiddenPages.includes(currentPage)
-          ? prevState.hiddenPages.filter((page) => page !== currentPage)
-          : [...prevState.hiddenPages, currentPage],
-      }),
-      () => {
-        const iframe = document.getElementById(
-          "pdfViewerIframe"
-        ) as HTMLIFrameElement;
-        if (iframe?.contentWindow) {
-          iframe.contentWindow.postMessage(
-            {
-              action: "setHiddenPages",
-              hiddenPages: this.state.hiddenPages,
-            },
-            "*" // We need to choose a specific target origin in production for security
-          );
+    if (this.state.hiddenPages.includes(currentPage)) {
+      toast.error(`Page ${this.getCurrentPageNumber()} is already hidden`, {
+        duration: 2000,
+      });
+    } else {
+      this.setState(
+        (prevState) => ({
+          hiddenPages: [...prevState.hiddenPages, currentPage],
+        }),
+        () => {
+          this.saveHiddenPages();
+          this.applyHiddenPagesToViewer();
+
+          const totalPages = this.getTotalPageNumber();
+          if (this.state.hiddenPages.length === totalPages) {
+            this.displayAllPagesHiddenMessage();
+          }
         }
-        toast.success(`Page ${currentPage} is hidden`, { duration: 2000 });
-      }
+      );
+    }
+  };
+
+  applyHiddenPagesToViewer = () => {
+    const iframe = document.getElementById(
+      "pdfViewerIframe"
+    ) as HTMLIFrameElement;
+    if (iframe?.contentWindow) {
+      iframe.contentWindow.postMessage(
+        {
+          action: "setHiddenPages",
+          hiddenPages: this.state.hiddenPages,
+        },
+        "*"
+      );
+    }
+    toast.success(`Page ${this.getCurrentPageNumber()} is now hidden`, {
+      duration: 2000,
+    });
+  };
+  displayAllPagesHiddenMessage = () => {
+    const iframe = document.getElementById(
+      "pdfViewerIframe"
+    ) as HTMLIFrameElement;
+    if (!iframe || !iframe.contentDocument) return;
+
+    const existingMessage = iframe.contentDocument.getElementById(
+      "allPagesHiddenMessage"
+    );
+    if (existingMessage) existingMessage.remove();
+
+    const messageDiv = iframe.contentDocument.createElement("div");
+    messageDiv.id = "allPagesHiddenMessage";
+    messageDiv.style.position = "absolute";
+    messageDiv.style.top = "50%";
+    messageDiv.style.left = "50%";
+    messageDiv.style.transform = "translate(-50%, -50%)";
+    messageDiv.style.fontSize = "20px";
+    messageDiv.style.color = "#8b8b8b";
+    messageDiv.style.zIndex = "1000";
+    messageDiv.textContent = "All pages are hidden.";
+    iframe.contentDocument.body.appendChild(messageDiv);
+  };
+  getTotalPageNumber = () => {
+    const iframe = document.getElementById(
+      "pdfViewerIframe"
+    ) as HTMLIFrameElement;
+    return (
+      iframe?.contentWindow?.PDFViewerApplication?.pdfDocument?.numPages || 0
     );
   };
   handleShareCurrentPage = () => {
@@ -178,6 +227,10 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
         toast.error("Failed to copy the link", { duration: 2000 });
       });
   };
+  handleShareClick(event) {
+    console.log("React: Received shareClicked event:", event.detail);
+    toast(`Link copied to clipboard: ${event.detail}`);
+  }
   getCurrentPageNumber = () => {
     const iframe = document.getElementById(
       "pdfViewerIframe"
@@ -316,23 +369,22 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
         ) : null}
         <div style={widgetStyle}>
           <button
+            className="hide-button"
             style={this.getButtonStyle(this.state.isHideHovered)}
             onMouseEnter={() => this.setState({ isHideHovered: true })}
             onMouseLeave={() => this.setState({ isHideHovered: false })}
-            onClick={this.toggleCurrentPageVisibility}
+            onClick={this.hideCurrentPage}
           >
             <img src={HideIcon} alt="Hide" style={iconStyle} />
           </button>
           <button
+            className="share-button"
             style={this.getButtonStyle(this.state.isShareHovered)}
             onMouseEnter={() => this.setState({ isShareHovered: true })}
             onMouseLeave={() => this.setState({ isShareHovered: false })}
             onClick={this.handleShareCurrentPage}
           >
             <img src={ShareIcon} alt="Share" style={iconStyle} />
-          </button>
-          <button onClick={this.saveHiddenPages}>
-            <img src={SaveIcon} alt="Save" style={iconStyle} />
           </button>
         </div>
         <iframe
@@ -345,7 +397,6 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
           Loading
         </iframe>
         <PDFWidget /> <Toaster />
-        <ShareNotifier />
       </div>
     );
   }
