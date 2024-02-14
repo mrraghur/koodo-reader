@@ -143,6 +143,10 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
       toast.error(`Page ${this.getCurrentPageNumber()} is already hidden`, {
         duration: 2000,
       });
+      const totalPages = this.getTotalPageNumber();
+      if (this.state.hiddenPages.length === totalPages) {
+        this.displayAllPagesHiddenMessage();
+      }
     } else {
       this.setState(
         (prevState) => ({
@@ -151,11 +155,6 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
         () => {
           this.saveHiddenPages();
           this.applyHiddenPagesToViewer();
-
-          const totalPages = this.getTotalPageNumber();
-          if (this.state.hiddenPages.length === totalPages) {
-            this.displayAllPagesHiddenMessage();
-          }
         }
       );
     }
@@ -170,6 +169,7 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
         {
           action: "setHiddenPages",
           hiddenPages: this.state.hiddenPages,
+          timeout: Number(process.env.REACT_APP_DEFAULT_TIMEOUT),
         },
         "*"
       );
@@ -236,7 +236,6 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
       "pdfViewerIframe"
     ) as HTMLIFrameElement;
     if (iframe?.contentWindow?.PDFViewerApplication) {
-      console.log(iframe.contentWindow.PDFViewerApplication.page);
       return iframe.contentWindow.PDFViewerApplication.page;
     }
     return null;
@@ -270,6 +269,11 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
       .then((data) => {
         if (data && data[bookKey]) {
           this.setState({ hiddenPages: data[bookKey] }, () => {
+            const totalPages = this.getTotalPageNumber();
+            if (this.state.hiddenPages.length === totalPages) {
+              this.displayAllPagesHiddenMessage();
+            }
+
             const iframe = document.getElementById(
               "pdfViewerIframe"
             ) as HTMLIFrameElement;
@@ -278,6 +282,7 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
             const message = {
               action: "setHiddenPages",
               hiddenPages: this.state.hiddenPages,
+              timeout: Number(process.env.REACT_APP_DEFAULT_TIMEOUT),
             };
             iframe.addEventListener(
               "load",
@@ -290,6 +295,14 @@ class Viewer extends React.Component<ViewerProps, ViewerState> {
               },
               { once: true }
             );
+
+            // Check if all the pages are hidden
+            setTimeout(() => {
+              const totalPages = this.getTotalPageNumber();
+              if (this.state.hiddenPages.length === totalPages) {
+                this.displayAllPagesHiddenMessage();
+              }
+            }, Number(process.env.REACT_APP_DEFAULT_TIMEOUT));
           });
         }
       })

@@ -918,7 +918,7 @@ See https://github.com/adobe-type-tools/cmap-resources
               !window.PDFViewerApplication.pdfViewer
             ) {
               console.log("PDF Viewer not ready, retrying...");
-              setTimeout(tryApplyHiddenPages, 2000);
+              setTimeout(tryApplyHiddenPages, event.data.timeout);
             } else {
               setHiddenPages(event.data.hiddenPages);
             }
