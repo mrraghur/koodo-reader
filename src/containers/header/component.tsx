@@ -206,6 +206,19 @@ class Header extends React.Component<HeaderProps, HeaderState> {
       toast.success(this.props.t("Synchronisation successful"));
     }
   };
+  handleGDriveAuth = () => {
+    const clientId = process.env.REACT_APP_OAUTH_CLIENT_ID;
+    const redirectUri = encodeURIComponent(
+      process.env.REACT_APP_REDIRECT_URI || ""
+    );
+    const scope = encodeURIComponent(
+      process.env.REACT_APP_GOOGLE_DRIVE_SCOPE || ""
+    );
+    const responseType = "token";
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=${responseType}&scope=${scope}&prompt=consent`;
+
+    window.location.href = authUrl;
+  };
 
   render() {
     return (
@@ -235,6 +248,15 @@ class Header extends React.Component<HeaderProps, HeaderState> {
             style={{ top: "18px" }}
           >
             <span className="icon-sort-desc header-sort-icon"></span>
+          </div>
+          <div
+            className="setting-icon-container"
+            onClick={() => {
+              this.handleGDriveAuth();
+            }}
+            style={{ top: "18px" }}
+          >
+            G
           </div>
           <div
             className="setting-icon-container"

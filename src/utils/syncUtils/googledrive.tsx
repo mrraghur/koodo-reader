@@ -43,7 +43,7 @@ class GoogleDriveUtil {
       const metadata = {
         mimeType: fileObj.mimeType,
         name: fileObj.fileName,
-        parents: ["appDataFolder"],
+        // parents: ["appDataFolder"],
       };
       try {
         const response = await axios.post(

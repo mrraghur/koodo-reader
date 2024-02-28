@@ -1,4 +1,5 @@
 import React from "react";
+import axios from "axios";
 import "./manager.css";
 import { RedirectProps, RedirectState } from "./interface";
 import { Trans } from "react-i18next";
@@ -9,6 +10,7 @@ import StorageUtil from "../../utils/serviceUtils/storageUtil";
 import Lottie from "react-lottie";
 import animationSuccess from "../../assets/lotties/success.json";
 import toast, { Toaster } from "react-hot-toast";
+import { driveConfig } from "../../constants/driveList";
 const successOptions = {
   loop: false,
   autoplay: true,
@@ -37,6 +39,7 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
     toast(this.props.t(message));
   };
   componentDidMount() {
+    this.handleGoogleDriveConfirm();
     //判断是否是获取token后的回调页面
     let url = document.location.href;
     if (document.location.hash === "#/" && url.indexOf("code") === -1) {
@@ -59,7 +62,29 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
       return false;
     }
   }
+  handleGoogleDriveConfirm = async () => {
+    // Check if the confirmation has already been processed
+    if (localStorage.getItem("googleDriveConfirmed")) {
+      return; // Exit the function early if yes
+    }
 
+    const hash = window.location.hash.substring(1);
+    const hashParams = new Map<string, string>();
+    hash.split("&").forEach((item) => {
+      let [key, value] = item.split("=");
+      if (key.startsWith("/")) key = key.substring(1);
+      hashParams.set(key, value);
+    });
+    let accessToken = hashParams.get("access_token");
+
+    if (accessToken === undefined) {
+      console.error("Access token not found");
+    } else {
+      StorageUtil.setReaderConfig(`googledrive_token`, accessToken);
+      localStorage.setItem("googleDriveConfirmed", "true"); // Set a flag indicating confirmation is complete
+      window.location.href = "/";
+    }
+  };
   render() {
     if (this.state.isError || this.state.isAuthed) {
       return (
@@ -78,7 +103,7 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
                   : "Authorisation failed"}
               </Trans>
             </div>
-            {this.state.isAuthed ? (
+            {/* {this.state.isAuthed ? (
               <div
                 className="token-dialog-token-text"
                 onClick={() => {
@@ -92,7 +117,7 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
                   <Trans>Copy token</Trans>
                 )}
               </div>
-            ) : null}
+            ) : null} */}
           </div>
         </div>
       );

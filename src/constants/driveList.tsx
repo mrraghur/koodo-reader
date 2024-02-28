@@ -7,7 +7,7 @@ export const driveConfig = {
   onedriveRefreshUrl: "https://koodo.960960.xyz/api/onedrive_refresh",
   googleAuthUrl: "https://koodo.960960.xyz/api/google_auth",
   googleRefreshUrl: "https://koodo.960960.xyz/api/google_refresh",
-  googleScope: "https://www.googleapis.com/auth/drive.appdata",
+  googleScope: "https://www.googleapis.com/auth/drive.file",
   dropboxClientId: "vnc67byrssocvy1",
   onedriveClientId: "506df58a-29ab-4020-afc5-6f423dc80f35",
   googleClientId:

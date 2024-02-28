@@ -1,11 +1,11 @@
 import React from "react";
 import "./importLocal.css";
 import BookModel from "../../model/Book";
-
+import axios from "axios";
 import { fetchMD5 } from "../../utils/fileUtils/md5Util";
 import { Trans } from "react-i18next";
 import Dropzone from "react-dropzone";
-
+import { driveConfig } from "../../constants/driveList";
 import { ImportLocalProps, ImportLocalState } from "./interface";
 import RecordRecent from "../../utils/readUtils/recordRecent";
 import { isElectron } from "react-device-detect";
@@ -56,6 +56,33 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
       this.setState({ width: document.body.clientWidth });
     });
   }
+  getMimeType = (fileExtension) => {
+    const extensionToMIME = {
+      epub: "application/epub+zip",
+      pdf: "application/pdf",
+      txt: "text/plain",
+      mobi: "application/x-mobipocket-ebook",
+      azw3: "application/vnd.amazon.ebook",
+      azw: "application/vnd.amazon.ebook",
+      htm: "text/html",
+      html: "text/html",
+      xml: "application/xml",
+      xhtml: "application/xhtml+xml",
+      mhtml: "message/rfc822",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      md: "text/markdown",
+      fb2: "application/x-fictionbook+xml",
+      cbz: "application/vnd.comicbook+zip",
+      cbt: "application/x-cbr",
+      cbr: "application/x-cbr",
+      cb7: "application/x-cb7",
+    };
+
+    return (
+      extensionToMIME[fileExtension.toLowerCase()] || "application/octet-stream"
+    );
+  };
+
   handleFilePath = async (filePath: string) => {
     clickFilePath = filePath;
     let md5 = await fetchMD5(await fetchFileFromPath(filePath));
@@ -91,22 +118,68 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
       this.props.history.push("/manager/home");
     }
   };
-  handleAddBook = (book: BookModel, buffer: ArrayBuffer) => {
-    return new Promise<void>((resolve, reject) => {
+  handleAddBook = (book, buffer) => {
+    console.log(book);
+    return new Promise<void>(async (resolve, reject) => {
       if (this.state.isOpenFile) {
         StorageUtil.getReaderConfig("isImportPath") !== "yes" &&
           StorageUtil.getReaderConfig("isPreventAdd") !== "yes" &&
           BookUtil.addBook(book.key, buffer);
         if (StorageUtil.getReaderConfig("isPreventAdd") === "yes") {
           this.handleJump(book);
-
           this.setState({ isOpenFile: false });
-
           return resolve();
         }
       } else {
         StorageUtil.getReaderConfig("isImportPath") !== "yes" &&
           BookUtil.addBook(book.key, buffer);
+      }
+
+      // Google Drive upload starts here
+      try {
+        const accessToken =
+          StorageUtil.getReaderConfig("googledrive_token") || "";
+
+        // Extract file extension from the book name or another source
+        const fileExtension = book.format;
+        const mimeType = this.getMimeType(fileExtension);
+        const fileName = `${book.name}`;
+
+        let file = new File([buffer], fileName, {
+          lastModified: new Date().getTime(),
+          type: mimeType,
+        });
+
+        const metadata = {
+          mimeType: file.type,
+          name: file.name,
+        };
+
+        let response = await axios.post(
+          "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
+          JSON.stringify(metadata),
+          {
+            headers: {
+              Authorization: "Bearer " + accessToken,
+              "Content-Type": "application/json; charset=UTF-8",
+            },
+          }
+        );
+
+        const location = response.headers.location;
+
+        await axios.put(location, file, {
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": mimeType,
+            "Content-Range": `bytes 0-${file.size - 1}/${file.size}`,
+          },
+          timeout: 60000,
+        });
+
+        console.log("Upload Finished, yay!");
+      } catch (error) {
+        console.error("Error occurred during Google Drive upload:", error);
       }
 
       let bookArr = [...(this.props.books || []), ...this.props.deletedBooks];
