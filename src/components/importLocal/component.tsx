@@ -5,7 +5,6 @@ import axios from "axios";
 import { fetchMD5 } from "../../utils/fileUtils/md5Util";
 import { Trans } from "react-i18next";
 import Dropzone from "react-dropzone";
-import { driveConfig } from "../../constants/driveList";
 import { ImportLocalProps, ImportLocalState } from "./interface";
 import RecordRecent from "../../utils/readUtils/recordRecent";
 import { isElectron } from "react-device-detect";
@@ -82,7 +81,6 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
       extensionToMIME[fileExtension.toLowerCase()] || "application/octet-stream"
     );
   };
-
   handleFilePath = async (filePath: string) => {
     clickFilePath = filePath;
     let md5 = await fetchMD5(await fetchFileFromPath(filePath));
@@ -135,21 +133,21 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
           BookUtil.addBook(book.key, buffer);
       }
 
-      // Google Drive upload starts here
+      // Upload the file to user's google drive
       try {
+        // Retrieve the Google Drive access token from storage.
         const accessToken =
           StorageUtil.getReaderConfig("googledrive_token") || "";
-
-        // Extract file extension from the book name or another source
+        if (!accessToken) {
+          throw new Error("Google Drive access token is missing");
+        }
         const fileExtension = book.format;
         const mimeType = this.getMimeType(fileExtension);
         const fileName = `${book.name}`;
-
         let file = new File([buffer], fileName, {
           lastModified: new Date().getTime(),
           type: mimeType,
         });
-
         const metadata = {
           mimeType: file.type,
           name: file.name,
@@ -166,8 +164,10 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
           }
         );
 
+        // Extract the location URL from the response headers to continue the upload
         const location = response.headers.location;
 
+        // Complete the file upload by PUTting the file to the provided location URL
         await axios.put(location, file, {
           headers: {
             Authorization: "Bearer " + accessToken,
@@ -176,8 +176,6 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
           },
           timeout: 60000,
         });
-
-        console.log("Upload Finished, yay!");
       } catch (error) {
         console.error("Error occurred during Google Drive upload:", error);
       }
