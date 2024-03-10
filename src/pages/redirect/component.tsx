@@ -60,10 +60,18 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
     }
   }
   handleGoogleDriveConfirm = async () => {
-    if (localStorage.getItem("googleDriveConfirmed")) {
+    // Check if the Google Drive token is valid
+    const tokenExpiresByString = localStorage.getItem(
+      "googleDriveTokenExpiresBy"
+    );
+    if (
+      tokenExpiresByString &&
+      new Date().getTime() < parseInt(tokenExpiresByString ?? "0", 10)
+    ) {
       return;
     }
-    // Parse URL hash to extract access token
+
+    // Parse URL hash to extract access token and expiration
     const hash = window.location.hash.substring(1);
     const hashParams = new Map<string, string>();
     hash.split("&").forEach((item) => {
@@ -72,16 +80,26 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
       hashParams.set(key, value);
     });
 
-    // Retrieve and store access token, then mark confirmation in localStorage
     let accessToken = hashParams.get("access_token");
+    let expiresIn = hashParams.get("expires_in");
+
     if (accessToken === undefined) {
       console.error("Access token not found");
     } else {
       StorageUtil.setReaderConfig(`googledrive_token`, accessToken);
-      localStorage.setItem("googleDriveConfirmed", "true");
+
+      if (expiresIn !== undefined) {
+        let expiresBy = new Date().getTime() + parseInt(expiresIn) * 1000; // Convert to milliseconds
+        localStorage.setItem("googleDriveTokenExpiresBy", expiresBy.toString());
+        console.log(
+          "Token will expire at ",
+          new Date(expiresBy).toLocaleString()
+        );
+      }
       window.location.href = "/";
     }
   };
+
   render() {
     if (this.state.isError || this.state.isAuthed) {
       return (
