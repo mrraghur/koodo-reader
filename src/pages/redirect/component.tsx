@@ -3,7 +3,6 @@ import "./manager.css";
 import { RedirectProps, RedirectState } from "./interface";
 import { Trans } from "react-i18next";
 import { getParamsFromUrl } from "../../utils/syncUtils/common";
-import copy from "copy-text-to-clipboard";
 import { withRouter } from "react-router-dom";
 import StorageUtil from "../../utils/serviceUtils/storageUtil";
 import Lottie from "react-lottie";
@@ -37,6 +36,7 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
     toast(this.props.t(message));
   };
   componentDidMount() {
+    this.handleGoogleDriveConfirm();
     //判断是否是获取token后的回调页面
     let url = document.location.href;
     if (document.location.hash === "#/" && url.indexOf("code") === -1) {
@@ -59,6 +59,46 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
       return false;
     }
   }
+  handleGoogleDriveConfirm = async () => {
+    // Check if the Google Drive token is valid
+    const tokenExpiresByString = localStorage.getItem(
+      "googleDriveTokenExpiresBy"
+    );
+    if (
+      tokenExpiresByString &&
+      new Date().getTime() < parseInt(tokenExpiresByString ?? "0", 10)
+    ) {
+      return;
+    }
+
+    // Parse URL hash to extract access token and expiration
+    const hash = window.location.hash.substring(1);
+    const hashParams = new Map<string, string>();
+    hash.split("&").forEach((item) => {
+      let [key, value] = item.split("=");
+      if (key.startsWith("/")) key = key.substring(1);
+      hashParams.set(key, value);
+    });
+
+    let accessToken = hashParams.get("access_token");
+    let expiresIn = hashParams.get("expires_in");
+
+    if (accessToken === undefined) {
+      console.error("Access token not found");
+    } else {
+      StorageUtil.setReaderConfig(`googledrive_token`, accessToken);
+
+      if (expiresIn !== undefined) {
+        let expiresBy = new Date().getTime() + parseInt(expiresIn) * 1000; // Convert to milliseconds
+        localStorage.setItem("googleDriveTokenExpiresBy", expiresBy.toString());
+        console.log(
+          "Token will expire at ",
+          new Date(expiresBy).toLocaleString()
+        );
+      }
+      window.location.href = "/";
+    }
+  };
 
   render() {
     if (this.state.isError || this.state.isAuthed) {
@@ -78,7 +118,7 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
                   : "Authorisation failed"}
               </Trans>
             </div>
-            {this.state.isAuthed ? (
+            {/* {this.state.isAuthed ? (
               <div
                 className="token-dialog-token-text"
                 onClick={() => {
@@ -92,7 +132,7 @@ class Redirect extends React.Component<RedirectProps, RedirectState> {
                   <Trans>Copy token</Trans>
                 )}
               </div>
-            ) : null}
+            ) : null} */}
           </div>
         </div>
       );

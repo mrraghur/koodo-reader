@@ -37,7 +37,7 @@ export function handleFetchNotes() {
   return (dispatch: (arg0: { type: string; payload: NoteModel[] }) => void) => {
     window.localforage.getItem("notes", (err, value) => {
       let noteArr: any;
-      if (value === null || value === []) {
+      if (value === null || value.length === 0) {
         noteArr = [];
       } else {
         noteArr = value;
@@ -64,7 +64,7 @@ export function handleFetchBookmarks() {
   ) => {
     window.localforage.getItem("bookmarks", (err, value) => {
       let bookmarkArr: any;
-      if (value === null || value === []) {
+      if (value === null || value.length === 0) {
         bookmarkArr = [];
       } else {
         bookmarkArr = value;

@@ -881,6 +881,52 @@ See https://github.com/adobe-type-tools/cmap-resources
           JSON.parse(localStorage.getItem("readerConfig")) || {};
         return readerConfig[key];
       };
+
+      // Function to toggle the visibility of pages
+      function setHiddenPages(hiddenPages) {
+        const viewer = document.getElementById("viewer");
+        if (
+          !viewer ||
+          !PDFViewerApplication ||
+          !PDFViewerApplication.pdfViewer
+        ) {
+          console.error("PDF Viewer not initialized.");
+          return;
+        }
+
+        // Pages in PDF.js are zero-indexed
+        hiddenPages = hiddenPages.map((page) => page - 1);
+
+        viewer.querySelectorAll(".page").forEach((page, index) => {
+          if (hiddenPages.includes(index)) {
+            page.style.display = "none";
+          } else {
+            page.style.display = "block";
+          }
+        });
+
+        // Refresh the viewer to re-render the layout
+        PDFViewerApplication.pdfViewer.update();
+      }
+
+      // Listen for messages from the parent window
+      window.addEventListener("message", (event) => {
+        if (event.data.action === "setHiddenPages") {
+          const tryApplyHiddenPages = () => {
+            if (
+              !window.PDFViewerApplication ||
+              !window.PDFViewerApplication.pdfViewer
+            ) {
+              console.log("PDF Viewer not ready, retrying...");
+              setTimeout(tryApplyHiddenPages, event.data.timeout);
+            } else {
+              setHiddenPages(event.data.hiddenPages);
+            }
+          };
+
+          tryApplyHiddenPages();
+        }
+      });
     </script>
   </body>
 </html>

@@ -19,4 +19,5 @@ export interface ImportLocalProps extends RouteComponentProps<any> {
 export interface ImportLocalState {
   isOpenFile: boolean;
   width: number;
+  gdriveFileId: string;
 }

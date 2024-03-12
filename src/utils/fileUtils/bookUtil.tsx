@@ -220,7 +220,7 @@ class BookUtil {
         ? pdfLocation + url
         : `${pdfLocation}?file=${book.key}`;
     } else {
-      return `./lib/pdf/web/viewer.html?file=${book.key}`;
+      return `./lib/pdf/web/viewer.html?file=${book.gdriveFileId}`;
     }
   }
   static reloadBooks() {
@@ -284,7 +284,8 @@ class BookUtil {
     md5: string,
     size: number,
     path: string,
-    file_content: ArrayBuffer
+    file_content: ArrayBuffer,
+    gdriveFileId: string
   ) {
     return new Promise<BookModel | string>(async (resolve, reject) => {
       let cover: any = "";
@@ -405,7 +406,8 @@ class BookUtil {
           size,
           page,
           path,
-          charset
+          charset,
+          gdriveFileId
         )
       );
     });

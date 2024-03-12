@@ -1,11 +1,10 @@
 import React from "react";
 import "./importLocal.css";
 import BookModel from "../../model/Book";
-
+import axios from "axios";
 import { fetchMD5 } from "../../utils/fileUtils/md5Util";
 import { Trans } from "react-i18next";
 import Dropzone from "react-dropzone";
-
 import { ImportLocalProps, ImportLocalState } from "./interface";
 import RecordRecent from "../../utils/readUtils/recordRecent";
 import { isElectron } from "react-device-detect";
@@ -25,6 +24,7 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
     this.state = {
       isOpenFile: false,
       width: document.body.clientWidth,
+      gdriveFileId: "",
     };
   }
   componentDidMount() {
@@ -56,6 +56,32 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
       this.setState({ width: document.body.clientWidth });
     });
   }
+  getMimeType = (fileExtension) => {
+    const extensionToMIME = {
+      epub: "application/epub+zip",
+      pdf: "application/pdf",
+      txt: "text/plain",
+      mobi: "application/x-mobipocket-ebook",
+      azw3: "application/vnd.amazon.ebook",
+      azw: "application/vnd.amazon.ebook",
+      htm: "text/html",
+      html: "text/html",
+      xml: "application/xml",
+      xhtml: "application/xhtml+xml",
+      mhtml: "message/rfc822",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      md: "text/markdown",
+      fb2: "application/x-fictionbook+xml",
+      cbz: "application/vnd.comicbook+zip",
+      cbt: "application/x-cbr",
+      cbr: "application/x-cbr",
+      cb7: "application/x-cb7",
+    };
+
+    return (
+      extensionToMIME[fileExtension.toLowerCase()] || "application/octet-stream"
+    );
+  };
   handleFilePath = async (filePath: string) => {
     clickFilePath = filePath;
     let md5 = await fetchMD5(await fetchFileFromPath(filePath));
@@ -91,22 +117,100 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
       this.props.history.push("/manager/home");
     }
   };
-  handleAddBook = (book: BookModel, buffer: ArrayBuffer) => {
-    return new Promise<void>((resolve, reject) => {
+  handleAddBook = async (book, buffer) => {
+    return new Promise<string>(async (resolve, reject) => {
+      // Check if the Google Drive token has expired
+      const tokenExpiresByString = localStorage.getItem(
+        "googleDriveTokenExpiresBy"
+      );
+      if (
+        !tokenExpiresByString ||
+        new Date().getTime() >= parseInt(tokenExpiresByString, 10)
+      ) {
+        // Notify the user to re-authenticate
+        toast.error(
+          this.props.t(
+            "To proceed, please authenticate with Google Drive again."
+          )
+        );
+        return;
+      }
+
+      let fileId = "";
       if (this.state.isOpenFile) {
         StorageUtil.getReaderConfig("isImportPath") !== "yes" &&
           StorageUtil.getReaderConfig("isPreventAdd") !== "yes" &&
           BookUtil.addBook(book.key, buffer);
         if (StorageUtil.getReaderConfig("isPreventAdd") === "yes") {
           this.handleJump(book);
-
           this.setState({ isOpenFile: false });
-
-          return resolve();
+          return resolve(fileId);
         }
       } else {
         StorageUtil.getReaderConfig("isImportPath") !== "yes" &&
           BookUtil.addBook(book.key, buffer);
+      }
+
+      // Upload the file to user's google drive
+      try {
+        // Retrieve the Google Drive access token from storage.
+        const accessToken =
+          StorageUtil.getReaderConfig("googledrive_token") || "";
+        if (!accessToken) {
+          throw new Error("Google Drive access token is missing");
+        }
+
+        const fileExtension = book.format;
+        const mimeType = this.getMimeType(fileExtension);
+        const fileName = `${book.name}`;
+        let file = new File([buffer], fileName, {
+          lastModified: new Date().getTime(),
+          type: mimeType,
+        });
+        const metadata = {
+          mimeType: file.type,
+          name: file.name,
+        };
+
+        let response = await axios.post(
+          "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",
+          JSON.stringify(metadata),
+          {
+            headers: {
+              Authorization: "Bearer " + accessToken,
+              "Content-Type": "application/json; charset=UTF-8",
+            },
+          }
+        );
+
+        // Extract the location URL from the response headers to continue the upload
+        const location = response.headers.location;
+        let uploadResponse = await axios.put(location, file, {
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": mimeType,
+            "Content-Range": `bytes 0-${file.size - 1}/${file.size}`,
+          },
+          timeout: 60000,
+        });
+
+        fileId = uploadResponse.data.id;
+
+        // Set the file to be publicly readable
+        await axios.post(
+          `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+          {
+            role: "reader",
+            type: "anyone",
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+      } catch (error) {
+        console.error("Error occurred during Google Drive upload:", error);
       }
 
       let bookArr = [...(this.props.books || []), ...this.props.deletedBooks];
@@ -137,12 +241,13 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
             this.setState({ isOpenFile: false });
             this.props.history.push("/manager/home");
           }, 100);
-          return resolve();
+          return resolve(fileId);
         })
         .catch(() => {
           toast.error(this.props.t("Import failed"));
-          return resolve();
+          return resolve(fileId);
         });
+      resolve(fileId);
     });
   };
 
@@ -207,18 +312,21 @@ class ImportLocal extends React.Component<ImportLocalProps, ImportLocalState> {
               md5,
               file.size,
               file.path || clickFilePath,
-              file_content
+              file_content,
+              ""
             );
             clickFilePath = "";
             if (result === "get_metadata_error") {
               toast.error(this.props.t("Import failed"));
               return resolve();
             }
-            await this.handleAddBook(
-              result as BookModel,
-              file_content as ArrayBuffer
-            );
-
+            if (result instanceof BookModel) {
+              let gdriveFileId = await this.handleAddBook(
+                result,
+                file_content as ArrayBuffer
+              );
+              result.gdriveFileId = gdriveFileId;
+            }
             return resolve();
           };
           reader.readAsArrayBuffer(file);

@@ -11,6 +11,8 @@ class Book {
   page: number;
   path: string;
   charset: string;
+  gdriveFileId: string;
+
   constructor(
     key: string,
     name: string,
@@ -23,7 +25,8 @@ class Book {
     size: number,
     page: number,
     path: string,
-    charset: string
+    charset: string,
+    gdriveFileId: string
   ) {
     this.key = key; // 数据库的键
     this.name = name; // 书籍名
@@ -37,6 +40,7 @@ class Book {
     this.page = page;
     this.path = path;
     this.charset = charset;
+    this.gdriveFileId = gdriveFileId;
   }
 }
 

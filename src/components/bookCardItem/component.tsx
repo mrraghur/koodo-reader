@@ -10,6 +10,8 @@ import RecordLocation from "../../utils/readUtils/recordLocation";
 import { isElectron } from "react-device-detect";
 import EmptyCover from "../emptyCover";
 import BookUtil from "../../utils/fileUtils/bookUtil";
+import axios from "axios";
+import toast from "react-hot-toast";
 
 declare var window: any;
 
@@ -81,7 +83,21 @@ class BookCardItem extends React.Component<BookCardProps, BookCardState> {
     this.props.handleActionDialog(false);
   };
 
-  handleJump = () => {
+  handleJump = async () => {
+    // Check if the Google Drive token has expired
+    const tokenExpiresByString = localStorage.getItem(
+      "googleDriveTokenExpiresBy"
+    );
+    if (
+      !tokenExpiresByString ||
+      new Date().getTime() >= parseInt(tokenExpiresByString, 10)
+    ) {
+      // Notify the user to re-authenticate with Google Drive
+      toast.error(
+        this.props.t("To proceed, please authenticate with Google Drive again.")
+      );
+      return;
+    }
     if (this.props.isSelectBook) {
       this.props.handleSelectedBooks(
         this.props.isSelected
@@ -94,7 +110,31 @@ class BookCardItem extends React.Component<BookCardProps, BookCardState> {
     }
     RecentBooks.setRecent(this.props.book.key);
     this.props.handleReadingBook(this.props.book);
-    BookUtil.RedirectBook(this.props.book, this.props.t, this.props.history);
+
+    // Fetch book content from Google Drive and store it locally
+    const fileId = this.props.book.gdriveFileId;
+    const accessToken = StorageUtil.getReaderConfig("googledrive_token");
+    if (fileId && accessToken) {
+      try {
+        const response = await axios.get(
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+          {
+            responseType: "arraybuffer",
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+        await window.localforage.setItem(fileId, response.data);
+        BookUtil.RedirectBook(
+          this.props.book,
+          this.props.t,
+          this.props.history
+        );
+      } catch (error) {
+        console.error("Error fetching book content from Google Drive:", error);
+      }
+    } else {
+      console.log("Missing fileId or accessToken for Google Drive.");
+    }
   };
   render() {
     let percentage = "0";
@@ -131,7 +171,7 @@ class BookCardItem extends React.Component<BookCardProps, BookCardState> {
           }}
         >
           <div
-            className="book-item-cover"
+            className={`book-item-cover book-item-${this.props.book.key}`}
             onClick={() => {
               this.handleJump();
             }}
